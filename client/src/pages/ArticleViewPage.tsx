@@ -129,7 +129,11 @@ function ArticleViewPage() {
       return
     }
 
-    if (simplifyCache['simple'] || !article?.id) {
+    if (!article) {
+      return
+    }
+
+    if (simplifyCache['simple']) {
       setSimplifyError(null)
       return
     }
