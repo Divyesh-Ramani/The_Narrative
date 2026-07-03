@@ -31,7 +31,8 @@ export interface ArticleItem {
   story_id: number | null
   title: string
   url: string
-  body: string
+  description: string | null
+  content: string | null
   full_text: string | null
   published_at: string
   source_name: string
@@ -54,12 +55,12 @@ export interface TimelineResponse {
   articles: TimelineArticle[]
 }
 
-export interface ExpansionResponse {
-  expansion: { text: string }
-}
-
 export interface SimplifyResponse {
   text: string
+}
+
+export interface ChatResponse {
+  answer: string
 }
 
 export interface FollowItem {
@@ -68,7 +69,6 @@ export interface FollowItem {
   followed_at: string
   last_seen_at: string
   title: string | null
-  summary: string | null
   article_count: number
   last_updated_at: string
 }
@@ -91,19 +91,13 @@ export function getArticle(id: string | number): Promise<ArticleResponse> {
   return apiRequest<ArticleResponse>(`/articles/${id}`)
 }
 
-export function getStoryTimeline(id: string | number): Promise<TimelineResponse> {
-  return apiRequest<TimelineResponse>(`/stories/${id}/timeline`)
+export function getStoryTimeline(id: string | number, currentArticleId?: number): Promise<TimelineResponse> {
+  const params = currentArticleId != null ? `?currentArticleId=${currentArticleId}` : '';
+  return apiRequest<TimelineResponse>(`/stories/${id}/timeline${params}`)
 }
 
-export function getStoryExpand(id: string | number): Promise<ExpansionResponse> {
-  return apiRequest<ExpansionResponse>(`/stories/${id}/expand`)
-}
-
-export function getStorySimplify(id: string | number, level: string, articleId?: number): Promise<SimplifyResponse> {
-  const params = articleId
-    ? `level=${encodeURIComponent(level)}&articleId=${articleId}`
-    : `level=${encodeURIComponent(level)}`
-  return apiRequest<SimplifyResponse>(`/stories/${id}/simplify?${params}`)
+export function getArticleSimplify(articleId: string | number): Promise<SimplifyResponse> {
+  return apiRequest<SimplifyResponse>(`/articles/${articleId}/simplify`)
 }
 
 export function getFollows(): Promise<FollowsResponse> {
@@ -116,4 +110,17 @@ export function postFollow(id: string | number): Promise<FollowActionResponse> {
 
 export function deleteFollow(id: string | number): Promise<FollowActionResponse> {
   return apiRequest<FollowActionResponse>(`/stories/${id}/follow`, { method: 'DELETE' })
+}
+
+export function postChatMessage(
+  articleId: number,
+  storyId: number | null,
+  question: string,
+  history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+): Promise<ChatResponse> {
+  return apiRequest<ChatResponse>('/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ articleId, storyId, question, history }),
+  })
 }

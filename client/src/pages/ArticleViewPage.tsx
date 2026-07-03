@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { getArticle, getStorySimplify, getStoryTimeline } from '../api/client'
+import { getArticle, getArticleSimplify, getStoryTimeline } from '../api/client'
 import type { ArticleItem, TimelineArticle } from '../api/client'
 import SimplifyToggle, { type SimplifyMode } from '../components/SimplifyToggle'
 import ParsedArticleBody from '../components/ParsedArticleBody'
@@ -21,18 +21,17 @@ function ArticleViewPage() {
   const [timelineLoading, setTimelineLoading] = useState(false)
   const [resolvedStoryId, setResolvedStoryId] = useState<number | null>(null)
 
-  const fetchTimeline = async (storyId: number, fetchId: number) => {
+  const fetchTimeline = async (storyId: number, fetchId: number, articleId: number) => {
     setTimelineLoading(true)
     try {
       // Artificial delay to prevent UI flickering and make the transition feel smoother
       await new Promise(resolve => setTimeout(resolve, 400))
-      
-      const res = await getStoryTimeline(storyId)
+
+      // Pass the current article ID so the server always pins it in the timeline,
+      // regardless of importance_score ranking or near-duplicate dedup.
+      const res = await getStoryTimeline(storyId, articleId)
       if (fetchId !== activeFetchIdRef.current) return
-      // Sort newest first — backend returns oldest→newest
-      const sorted = res.articles
-        .sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime())
-      setTimelineArticles(sorted)
+      setTimelineArticles(res.articles)
     } catch {
       // silently fail — timeline is non-critical
     } finally {
@@ -63,7 +62,7 @@ function ArticleViewPage() {
       setResolvedStoryId(res.article.story_id)
 
       if (res.article.story_id) {
-        fetchTimeline(res.article.story_id, fetchId)
+        fetchTimeline(res.article.story_id, fetchId, Number(id))
       } else {
         setTimelineArticles([])
         setTimelineLoading(false)
@@ -109,9 +108,8 @@ function ArticleViewPage() {
     setSimplifyLoading(true)
     setSimplifyError(null)
     try {
-      const storyId = resolvedStoryId ?? article?.story_id ?? article?.id ?? Number(id)
       const articleIdForSimplify = article?.id
-      const res = await getStorySimplify(storyId, 'simple', articleIdForSimplify)
+      const res = await getArticleSimplify(articleIdForSimplify)
       setSimplifyCache((prev) => ({ ...prev, simple: res.text }))
     } catch {
       setSimplifyError('Failed to load simplified version')
@@ -236,14 +234,9 @@ function ArticleViewPage() {
               return (
                 <div className="font-body text-body-lg text-on-surface flex flex-col gap-6 leading-relaxed">
                   <ParsedArticleBody
-                    text={displayArticle.full_text || displayArticle.body || 'Original article content unavailable.'}
+                    text={displayArticle.full_text || displayArticle.content || displayArticle.description || 'Original article content unavailable.'}
                     source={displayArticle.source_name}
                   />
-                  {!displayArticle.full_text && displayArticle.url && (
-                    <p className="text-sm leading-6 text-on-surface-variant">
-                      Full article extraction is unavailable for this publisher. Use the original source link below for the complete story.
-                    </p>
-                  )}
                 </div>
               )
             })()}
@@ -267,7 +260,11 @@ function ArticleViewPage() {
       </main>
 
       {/* AI Chat Sidebar */}
-      <ArticleSidebar />
+      <ArticleSidebar
+        articleId={article?.id ?? null}
+        storyId={resolvedStoryId}
+        articleTitle={article?.title ?? ''}
+      />
     </div>
   )
 }
